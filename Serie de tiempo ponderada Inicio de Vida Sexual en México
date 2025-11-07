@@ -1,0 +1,291 @@
+library(tidyverse)
+library(survey)
+library(dplyr)
+library(haven)
+
+#No hay información disponible sobre la variable IVS a810 para la ensanut 2016 por motivos de que se pensé como una encuesta intermedia de caracter mas reducido
+#Creamos un apartado para el rango de edad de 10 a 19 años
+#Variable d0305
+
+ensanut2023_10_19<-read_sav("C:/Users/USER/Downloads/ENSANUT/ENSANUT Cuestionario de Salud adolescentes 10 a 19 años/adolescentes_ensanut2023_w_n.sav")
+
+table(ensanut2023_10_19$d0305)
+
+ggplot(ensanut2023_10_19)+
+  aes(x=d0305)+
+  geom_bar()
+
+
+#Creamos las bases para la ENSANUT para las personas con edad de 20 o más
+#Variable a0801 vida sexual
+
+ensanut2023_20_mas<-read_sav("C:/Users/USER/Downloads/Bases de datos/ENSANUT/ENSANUT Cuestionario de Salud adultos 20 o más/adultos_ensanut2023_w_n.sav")
+ensanut2022_20_mas<-read_sav("C:/Users/USER/Downloads/Bases de datos/ENSANUT/ENSANUT Cuestionario de Salud adultos 20 o más/ensadul2022_entrega_w.sav")
+ensanut2021_20_mas<-read_sav("C:/Users/USER/Downloads/Bases de datos/ENSANUT/ENSANUT Cuestionario de Salud adultos 20 o más/ensadul2021_entrega_w_15_12_2021.sav")
+ensanut2020_20_mas<-read_sav("C:/Users/USER/Downloads/Bases de datos/ENSANUT/ENSANUT Cuestionario de Salud adultos 20 o más/adultos_vac_tab_ensanut2020_w.sav")
+ensanut2018_20_mas<-read_sav("C:/Users/USER/Downloads/Bases de datos/ENSANUT/ENSANUT Cuestionario de Salud adultos 20 o más/CS_ADULTOS2018.sav")
+ensanut2012_20_mas<-read_sav("C:/Users/USER/Downloads/Bases de datos/ENSANUT/ENSANUT Cuestionario de Salud adultos 20 o más/2012Adultos.sav")
+ensanut2006_20_mas<-read_sav("C:/Users/USER/Downloads/Bases de datos/ENSANUT/ENSANUT Cuestionario de Salud adultos 20 o más/2006Adultos.sav")
+ensanut2000_20_mas<-read_sav("C:/Users/USER/Downloads/Bases de datos/ENSANUT/ENSANUT Cuestionario de Salud adultos 20 o más/2000Adultos.sav")
+
+names(ensanut2000_20_mas)
+#El ponderador de algunas encuestas puede ser p_adulto
+
+
+#Comenzamos con el 2023
+
+media_filtrada <- ensanut2023_20_mas %>%
+  filter(a0801 != 88, a0801 != 99) %>%  # Excluye los códigos 88 y 99
+  summarise(
+    media_edad = mean(a0801, na.rm = TRUE)
+  )
+
+media_filtrada
+
+prop<-ensanut2023_20_mas%>%
+  group_by(a0801)%>%
+  summarise(
+    Freq=n(),
+    Porcentaje = (n() / nrow(.)) * 100  )%>%
+  ungroup()
+prop
+
+#Creamos el diseño muestral para el 2023
+diseño_ENSANUT_20mas<-svydesign(
+  ids = ~upm,
+  strata = ~est_sel,
+  weights = ~ponde_f,
+  data= ensanut2023_20_mas
+)
+
+#Creamos una tabla con las proporciones
+
+tabla_prop_relacionsexual<-svytable(~a0801, diseño_ENSANUT_20mas)%>%
+  as.data.frame()%>%
+  mutate(
+    Freq = as.integer(Freq),
+    Prop=round(Freq/sum(Freq)*100, 1))
+
+no_sexo_2023<-tabla_prop_relacionsexual%>%
+  filter(a0801==0)%>%
+  mutate(año=2023)%>%
+  rename(inicio= a0801)
+
+
+#Graficamos
+library(ggplot2)
+ggplot(tabla_prop_relacionsexual)+
+  aes(x=a0801, y= Freq, fill = Freq)+
+  geom_col()+
+  geom_text(aes(label = Freq),
+            vjust=-0.5,
+            size=2,
+            color= "black")+
+ 
+  labs(ttile= "¿A qué edad tuvieron su primera relación sexual?", x= "Edad", y="Frecuencia")+
+  theme_minimal()+
+  scale_fill_viridis_c(option = "magma", direction = -1)+
+  guides(fill = "none")
+
+#Obtenemos los datos para el 2022
+diseño_ENSANUT_20mas<-svydesign(
+  ids = ~upm,
+  strata = ~est_sel,
+  weights = ~ponde_f,
+  data= ensanut2022_20_mas
+)
+
+tabla_prop_relacionsexual<-svytable(~a0801, diseño_ENSANUT_20mas)%>%
+  as.data.frame()%>%
+  mutate(
+    Freq = as.integer(Freq),
+    Prop=round(Freq*100/sum(Freq), 1))
+
+no_sexo_2022<-tabla_prop_relacionsexual%>%
+  filter(a0801==0)%>%
+  mutate(año=2022)%>%
+  rename(inicio= a0801)
+
+#Obtenemos datos para el 2021
+
+sum(is.na(ensanut2021_20_mas$ponde_f))
+
+ensanut2021_20_mas_filt<-ensanut2021_20_mas[!is.na(ensanut2021_20_mas$ponde_f), ]
+
+diseño_ENSANUT_20mas<-svydesign(
+  ids = ~upm,
+  strata = ~est_sel,
+  weights = ~ponde_f,
+  data= ensanut2021_20_mas_filt
+)
+
+tabla_prop_relacionsexual<-svytable(~a0801, diseño_ENSANUT_20mas)%>%
+  as.data.frame()%>%
+  mutate(
+    Freq = as.integer(Freq),
+    Prop=round(Freq*100/sum(Freq), 1))%>%
+  arrange(desc(Prop))
+
+no_sexo_2021<-tabla_prop_relacionsexual%>%
+  filter(a0801==0)%>%
+  mutate(año=2021)%>%
+  rename(inicio= a0801)
+
+#Para el año 2020
+
+diseño_ENSANUT_20mas<-svydesign(
+  ids = ~Upm,
+  strata = ~est_sel,
+  weights = ~ponde_g20,
+  data= ensanut2020_20_mas
+)
+
+tabla_prop_relacionsexual<-svytable(~a0801, diseño_ENSANUT_20mas)%>%  #Revisar si en efecto existen datos sobre este apartado este año
+  as.data.frame()%>%
+  mutate(
+    Freq = as.integer(Freq),
+    Prop=round(Freq*100/sum(Freq), 1))%>%
+  arrange(desc(Prop))
+
+no_sexo_2020<-tabla_prop_relacionsexual%>%
+  filter(a0801==0)%>%
+  mutate(año=2020)
+
+rm(no_sexo_2020)
+
+#Para el año 2018
+
+diseño_ENSANUT_20mas<-svydesign(
+  ids = ~UPM,
+  strata = ~ESTRATO,
+  weights = ~F_20MAS,
+  data= ensanut2018_20_mas
+)
+
+tabla_prop_relacionsexual<-svytable(~P8_1, diseño_ENSANUT_20mas)%>%
+  as.data.frame()%>%
+  mutate(
+    Freq = as.integer(Freq),
+    Prop=round(Freq*100/sum(Freq), 1))%>%
+  arrange(desc(Prop))
+
+no_sexo_2018<-tabla_prop_relacionsexual%>%
+  filter(P8_1== "00")%>%
+  mutate(año=2018)%>%
+  rename(inicio= P8_1)
+
+#Para el 2012
+
+diseño_ENSANUT_20mas<-svydesign(
+  ids = ~code_upm,
+  strata = ~est_dis,
+  weights = ~pondef,
+  data= ensanut2012_20_mas
+)
+
+tabla_prop_relacionsexual<-svytable(~a801, diseño_ENSANUT_20mas)%>%
+  as.data.frame()%>%
+  mutate(
+    Freq = as.integer(Freq),
+    Prop=round(Freq*100/sum(Freq), 1))
+
+no_sexo_2012<-tabla_prop_relacionsexual%>%
+  filter(a801== 0)%>%
+  mutate(año=2012)%>%
+  rename(inicio= a801)
+
+
+#Para el 2006
+diseño_ENSANUT_20mas<-svydesign(
+  ids = ~code_upm,
+  strata = ~estrato,
+  weights = ~p_adult,
+  data= ensanut2006_20_mas
+)
+
+tabla_prop_relacionsexual<-svytable(~a801, diseño_ENSANUT_20mas)%>% #Revisar las bases porque los datos sobre la vida sexual no aparecen
+  as.data.frame()%>%
+  mutate(
+    Freq = as.integer(Freq),
+    Prop=round(Freq*100/sum(Freq), 1))%>%
+  arrange(desc(Prop))
+
+no_sexo_2006<-tabla_prop_relacionsexual%>%
+  filter(a801== 0)%>%
+  mutate(año=2006)
+rm(no_sexo_2006)
+
+#Para el 2000
+
+names(ensanut2000_20_mas)
+
+diseño_ENSANUT_20mas<-svydesign(
+  ids = ~folio_v,
+  strata = ~claent,
+  weights = ~p_adulto,
+  data= ensanut2000_20_mas
+)
+
+#Lo hace sin ponderar
+tabla_prop_relacionsexual_muestra<-ensanut2000_20_mas%>%
+  group_by(a2401)%>%
+  summarise(
+    Freq= n(),
+    .groups = "drop"
+  )%>%
+  mutate(
+    Prop= Freq*100/sum(Freq)
+  )
+no_sexo_2000<- tabla_prop_relacionsexual_muestra%>%
+  filter(a2401==0)%>%
+  mutate(año=2000)%>%
+  rename(inicio= a2401)
+
+#Serie de tiempo
+class(no_sexo_2000$inicio)
+
+#Cambiamos la variable a factor
+no_sexo_2000 <- no_sexo_2000 %>%
+  mutate(inicio = as_factor(inicio))
+#Unimos las bases de una misma
+
+no_sexo<-bind_rows(no_sexo_2000, no_sexo_2012, no_sexo_2018, no_sexo_2021, no_sexo_2022, no_sexo_2023)
+no_sexo
+
+no_sexo_clean<-no_sexo%>%
+  mutate(
+    inicio=case_when(
+      inicio=="No relación sex." ~ "0",
+      inicio=="00"~ "0",
+      TRUE~ as.character(inicio)
+    ),
+    año=as.numeric(año),
+    Prop = as.numeric(Prop),
+    Prop = round(Prop, 1)
+  )%>%
+  filter(inicio=="0")%>%
+  rename("Vida Sexual"= "inicio")
+  
+#Creamos la línea de tiempo
+
+ggplot(no_sexo_clean, aes(x=año, y= Prop))+
+  geom_line(colo= "#0072B2", size=1.2)+
+  geom_point(color="#D55E00", size=3)+
+  geom_text(aes(label=paste0(Prop,"%")),
+            vjust=-1,
+            hjust=0.5,
+            size = 4,
+            color="black")+
+  scale_x_continuous(breaks = unique(no_sexo_clean$año))+
+  labs(
+    title= "Porcentaje de población sin inicio de vida sexual",
+    subtitle = "Ensanut (2000-2023)",
+    x = "Año de la encuesta",
+    y= "Porcentaje (%)",
+    
+  )+
+  theme_minimal()+
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))
+  
+  
