@@ -1,0 +1,116 @@
+library(ggplot2)
+library(dplyr)
+library(sf)
+library(rayshader)
+library(viridis)
+#Obtener mapa de fuentes como INEGI, IDEA UNAM u otra fuente.
+Mexico<-st_read("C:/Users/USER/Downloads/Bases de datos/Mapas/México Federal/dest2019cw.shp")
+
+ggplot()+
+  geom_sf(data = Mexico, fill= "gray90", color= "gray20", linewidth = 1)
+
+#Microdatos INEGI ENOE 2025 T2
+Enoe_2025<-conjunto_de_datos_sdem_enoe_2025_2t
+rm(conjunto_de_datos_sdem_enoe_2025_2t)
+
+
+
+Enoe_2025<-Enoe_2025%>%
+  rename(ent=CVE_ENT)
+
+#Creamos el diseño de muestral
+
+diseño<-svydesign(id=upm, strata=~est, data=Enoe_2025, weights=~fac_tri, nest = T)
+
+#Creamos una tabla para los promedios de las edades por entidad
+
+Tabla_promedio_eda_ent<-Enoe_2025%>% 
+  group_by(ent)%>%
+  summarise(eda_promedio=mean(eda, na.rm=T))
+Tabla_promedio_eda_ent
+
+#Creamos una tabla con los códigos de las entidades
+nombres_entidades <- c(
+  "Aguascalientes" = 1,
+  "Baja California" = 2,
+  "Baja California Sur" = 3,
+  "Campeche" = 4,
+  "Chiapas" = 5,
+  "Chihuahua" = 6,
+  "Ciudad de México" = 7,
+  "Coahuila de Zaragoza" = 8,
+  "Colima" = 9,
+  "Durango" = 10,
+  "Guanajuato" = 11,
+  "Guerrero" = 12,
+  "Hidalgo" = 13,
+  "Jalisco" = 14,
+  "México" = 15,
+  "Michoacán de Ocampo" = 16,
+  "Morelos" = 17,
+  "Nayarit" = 18,
+  "Nuevo León" = 19,
+  "Oaxaca" = 20,
+  "Puebla" = 21,
+  "Querétaro" = 22,
+  "Quintana Roo" = 23,
+  "San Luis Potosí" = 24,
+  "Sinaloa" = 25,
+  "Sonora" = 26,
+  "Tabasco" = 27,
+  "Tamaulipas" = 28,
+  "Tlaxcala" = 29,
+  "Veracruz de Ignacio de la Llave" = 30,
+  "Yucatán" = 31,
+  "Zacatecas" = 32
+)
+nombres_entidades <- setNames(names(nombres_entidades), nombres_entidades)
+
+Tabla_promedio_eda_ent<-Tabla_promedio_eda_ent%>%
+  mutate(nombres_entidades=nombres_entidades[as.character(ent)])
+
+#Coincidimos los nombres de las columnas
+Tabla_promedio_eda_ent<-Tabla_promedio_eda_ent%>%
+  rename(NOM_ENT=nombres_entidades)
+
+#Unimos las tablas
+
+
+mapa_edades<-left_join(Mexico, Tabla_promedio_eda_ent, by="NOM_ENT")
+
+#revisamos que el tipo de data creado sea SF, ya que es el formato que se requiere para hacer mapas.
+
+class(mapa_edades)
+
+#Creamos el mapa 2D
+
+mapa_2D<-ggplot(mapa_edades, aes(fill = eda_promedio))+
+  geom_sf()+
+  scale_fill_viridis(option = "magma", direction = -1)+
+  labs(title = "Edad promedio por estado")+
+  theme_void()+
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    legend.title = element_blank()
+  )
+
+#Convertimos el mapa en una matriz de elevación
+plot_gg(
+  ggobj = mapa_2D,
+  multicore = T,
+  width = 10, height = 10, scale = 250,
+  zoom = 1, phi = 45, theta = -45,
+  height_aes = "fill",
+  background = "white"
+)
+#Para ver y gurdar la imagen 3D
+
+render_camera(zoom = 0.6) # Ajusta la vista de la cámara si es necesario
+render_highquality(
+  filename = "mapa_edades_mexico_3d.png",
+  lightdirection = 270,
+  lightcolor = "white",
+  lightintensity = 150,
+  interactive = FALSE,
+  width = 800, height = 800
+)
