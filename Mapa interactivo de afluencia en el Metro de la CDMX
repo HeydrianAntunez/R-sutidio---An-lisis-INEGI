@@ -1,0 +1,67 @@
+library(ggplot2)
+library(dplyr)
+library(sf)
+library(ggspatial)
+library(plotly)
+library(tidyverse)
+library(rayshader)
+
+#Crear un dataframe con las coordenadas de las líndeas del metro
+
+attach(Afluencia_Metro_2025_07)
+ Línea_metro<-st_read("C:/Users/USER/Downloads/INEGI/Mapas/SCTMETRO.json")
+ rm(Línea_metro)
+ 
+ #Cargamos las diferentes capas y mapas que usaremos
+ Afluencia<-read_csv("C:/Users/USER/Downloads/Bases de datos/Mapas/Metro afluencia diaria.csv")
+ Linea_metro<-st_read("C:/Users/USER/Downloads/Bases de datos/Mapas/Metro/sctmetro_lineas_utm14n.shp")
+ CDMX<-st_read("C:/Users/USER/Downloads/Bases de datos/Mapas/poligonos_alcaldias_cdmx.shp")
+ Estaciones_metro<-st_read("C:/Users/USER/Downloads/Bases de datos/Mapas/Metro/stcmetro_shp/STC_Metro_estaciones_utm14n.shp")
+
+#Renombramos la variable estacion para que coincidan los datas de las afluencias y las geolocalizaciones
+ 
+ Estaciones_metro<-Estaciones_metro%>%
+   rename(estacion=NOMBRE)
+ #Unes los datos de las estaciones del metro con el data de la afluencia
+
+ Afluencia_estaciones<- left_join(Estaciones_metro, Afluencia, by = "estacion")
+ #Comprobamos que usen el mismo sistema de localización
+ st_crs(Linea_metro)
+ st_crs(CDMX)
+ st_crs(Linea_metro)
+ #Creamos el mapa con las burbujas de calor
+ metro_mapa_2D<-ggplot()+
+  geom_sf(data = CDMX, fill= "gray90", color= "gray20", linewidth = 1)+
+  geom_sf(data = Linea_metro, linewidth = 0.5)+
+  geom_sf(data = Afluencia_estaciones, aes(color = as.factor (linea), size = afluencia))+
+  labs(
+    title = "Sistema de Tranporte Colectivo Metro",
+    suntitle = "Afluencia de las estaciones",
+    size= "Número de usuarios",
+    scale_color_discrete(name = "Estaciones") #Aquí se realizó un cambio para poder utilizar la variable discreta en el modelado 3D
+  )+
+  theme_void()+
+  scale_size_continuous(range = c(1, 5))
+
+ metro_mapa_2D
+
+#Cambiamos el código para hacerlo interactivo
+ 
+mapa_interactivo<-ggplot()+
+  geom_sf(data = CDMX, fill= "gray90", color= "gray20", linewidth = 0.5)+
+  geom_sf(data = Linea_metro, linewidth = 0.5)+
+  geom_sf(data = Afluencia_estaciones, aes(color = as.factor (linea),size = afluencia, text = paste(estacion,"<br>Afluencia:", afluencia)),
+          show.legend = "point")+
+  labs(
+    title = "Sistema de Tranporte Colectivo Metro",
+    suntitle = "Afluencia de las estaciones",
+    size= "Número de usuarios",
+    color= "Estaciones"
+  )+
+  theme_void()+
+  scale_size_continuous(range = c(1, 5))
+mapa_interactivo_final<-ggplotly(mapa_interactivo, tooltip = "text")
+ 
+mapa_interactivo_final
+
+ 
