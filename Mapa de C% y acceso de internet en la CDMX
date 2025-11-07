@@ -1,0 +1,109 @@
+library(ggplot2)
+library(dplyr)
+library(sf)
+library(ggspatial)
+library(plotly)
+library(tidyverse)
+library(readxl)
+library(rnaturalearth)
+
+#Obtener datos de los mapas y archivos SHP de Datos Abiertos de la CDMX: https://datos.cdmx.gob.mx/
+
+#Guardamos bases de datos
+
+alcaldias_CDMX<-st_read("C:/Users/USER/Downloads/Bases de datos/Mapas/poligonos_alcaldias_cdmx.shp")
+C5<-st_read("C:/Users/USER/Downloads/Bases de datos/Mapas/C5 2021/ubicacion_c5_c2/ubicacion_c5_c2.shp")
+colonias_CDMX<-st_read("C:/Users/USER/Downloads/Bases de datos/Mapas/Colonias CDMX 2023/shapefile/poligonos_colonias_cdmx.shp")
+
+wifi<-read_excel("C:/Users/USER/Downloads/Bases de datos/Mapas/Wifi gratuito/00-2025-wifi_gratuito_en_cdmx.xlsx")
+
+st_crs(alcaldias_CDMX)
+st_crs(C5)
+
+#Mapeamos las alcaldías
+ggplot()+
+geom_sf(data = alcaldias_CDMX,fill= "lightblue",color= "black", linewidth = 1)+
+geom_sf(data=C5, color = "#d50000",linewidth=1, size= 5)+
+  theme_minimal()
+
+
+#En un mismo mapa podemos colocar las redes de internet, los pilares, las utopías, postes de c5 y demás
+colonias_CDMX<-st_read("C:/Users/USER/Downloads/Bases de datos/Mapas/Colonias CDMX 2023/shapefile/poligonos_colonias_cdmx.shp")
+
+ggplot()+
+  geom_sf(data= alcaldias_CDMX, fill="white", color = "gray10", linewidth=1)+
+  geom_sf(data = colonias_CDMX, fill= "lightblue", color= "gray30", linewidth=1)
+
+#Para continuar con el mapeado, convertiremos el archivo xlsx del wifi a sph
+
+wifi_limpio <- wifi %>%
+  drop_na(longitud, latitud)
+
+wifi_sf<-st_as_sf(wifi_limpio, 
+                  coords = c("longitud", "latitud"),
+                  crs=4326)
+#Guardamos en un shp
+
+st_write(wifi_sf, "zonas_wifi_cdmx.shp", delete_layer = T)
+
+#Continuamos con el mapa de las señales de Wifi
+
+ggplot()+
+  geom_sf(data= alcaldias_CDMX, fill="white", color = "gray10", linewidth=1)+
+  geom_sf(data = wifi_sf, fill= "red", color = "purple", linewidth=1)
+
+#HAcemos una versión como mapa Kernel
+#Necesitamos transformar nuestro shp de las redes wifi a dataframe
+wifi_coords <- as.data.frame(st_coordinates(wifi_sf))
+
+#Mapeamos
+
+ggplot()+
+  geom_sf(data= alcaldias_CDMX, fill="black", color = "white", linewidth=1)+ #éste será nuestro mapa base
+  #Agregamos las densidades Kernel
+  stat_density2d_filled(data=wifi,
+                        aes(x= longitud, y= latitud, fill= after_stat(level)),
+                        alpha= 0.7,
+                        contour_var = "density",
+                        bins=20)+ #número de niveles de densidad
+
+  #escala de colores cálidos(plasma, magma, infierno, viridis)
+  scale_fill_viridis_d(option = "inferno", direction = -1, name = "Densidad de Wifi")+
+  #Añadir los puntos individuales para visualizarlos. OPCIONAL
+geom_sf(data = wifi_sf, color="white", size=0.5, alpha= 0.3)+
+  #Ajustar coordenadas
+  coord_sf(crs = 4326)+
+  labs(title = "Mapa de zonas Wifi",
+       subtitle= "Ciudad de México")+
+  theme_void()+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+  
+#Intentamos remover la mancha amarilla de zonas 0
+
+hbins <- hexbin(wifi$longitud, wifi$latitud, xbins = 50)
+hdata <- data.frame(hcell2xy(hbins), count = hbins@count) %>%
+  # ¡FILTRO CLAVE! Solo conservamos las celdas con al menos 1 punto WiFi
+  filter(count >= 1)
+
+
+ggplot() +
+  # 1. Capa base: El contorno de la CDMX
+  geom_sf(data = alcaldias_CDMX, fill = "black", color = "cyan") +
+  
+  # 2. Mapa de Calor (Dibujando solo los hexágonos con count >= 1)
+  # Usamos geom_hex con los datos pre-calculados (hdata)
+  geom_hex(data = hdata,
+           aes(x = x, y = y, fill = count),
+           stat = "identity", # 'identity' porque los datos ya tienen la estadística calculada
+           alpha = 0.7) + 
+  
+  # 3. Puntos WiFi (Referencia)
+  geom_sf(data = wifi_sf, color = "white", size = 0.1, alpha = 0.6) +
+  # 4. Escala y Estilo
+  scale_fill_viridis_c(option = "inferno", direction = -1, name = "Áreas con acceso a wifi gratuito") +
+  coord_sf(crs = 4326) +
+  labs(title = "Ciudad de México: puntos de acceso Wifi",
+       subtitle =  ,
+       x = "Longitud", y = "Latitud") +
+  theme_void()
