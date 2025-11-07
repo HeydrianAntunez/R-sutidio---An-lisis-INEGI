@@ -1,0 +1,149 @@
+library(plotly)
+library(survey)
+library(ggplot2)
+library(ggiraph)
+library(leaflet)
+library(htmltools)
+library(dplyr)
+attach(Enoe_2025)
+library(forecast)
+library(tidyverse)
+library(DT)
+library(htmlwidgets)
+
+#Cargar base de datos
+Enoe_2025<- conjunto_de_datos_sdem_enoe_2025_1t
+
+#Exploración de la variable ingreso
+boxplot(Enoe_2025$ingocup)
+ggplot(Enoe_2025, aes(x= ingocup))+
+  geom_boxplot()
+  
+#Filtrar base por población económicamente activa con ingresos mayor a 0
+Enoe_2025<-Enoe_2025%>%
+  filter(clase1==1, ingocup>0, !is.na(ingocup), !is.na(cs_p13_1))
+  
+#Creamos el diseño muestral para encuestas complejas
+
+Enoe_diseño <- svydesign(
+  ids = ~upm,
+  strata = ~est,
+  weights = ~fac_tri,
+  data = Enoe_2025,
+  nest = TRUE
+)
+
+#Eexploramos los datos ponderados
+
+table(Enoe_2025$sex)
+
+svytable(~Enoe_2025$sex,design=Enoe_diseño)
+
+#Creamos una tabla de proporciones
+
+edu_prop<-svytable(~cs_p13_1, design = Enoe_diseño)%>%
+  as.data.frame()%>%
+  mutate(Prop=round(Freq*100/sum(Freq),1))
+edu_prop
+ 
+edu_sex_prop<-svytable(~cs_p13_1+sex, design = Enoe_diseño)%>%
+  as.data.frame()%>%
+  mutate(Prop=round(Freq*100/sum(Freq),1))
+edu_sex_prop
+
+#Graficamos proprociones
+ggplot(data=edu_prop, aes(x=cs_p13_1, y =Prop, fill = cs_p13_1))+
+  geom_col()+
+  scale_x_discrete(limits=edu_prop$cs_p13_1, labels=c("Ninunga", "Preescolar","Primaria","Secundaria","Preparatoria","Normal","Técnica", "Profesionar", "Maestría","Doctorado", "No sabe"))+
+  theme(axis.text = element_text(size = 10, angle = 45), legend.position = "none") +
+  geom_text(aes(label=paste0(Freq, " ", "", "\n(", Prop, "%",")")))+
+  labs(tittle="Nidel de educación ponderado", x="Nivel de educación", y= "Proporción de la población")
+
+ggplot(data=edu_sex_prop, aes(x=cs_p13_1, y =Prop, fill = sex))+
+  geom_col()+
+  scale_x_discrete(limits=edu_prop$cs_p13_1, labels=c("Ninunga", "Preescolar","Primaria","Secundaria","Preparatoria","Normal","Técnica", "Profesionar", "Maestría","Doctorado", "No sabe"))+
+  theme(axis.text = element_text(size = 10, angle = 45), legend.position = "none") +
+  geom_text(aes(label=paste0(Freq, " ", "", "\n(", Prop, "%",")")))+
+  labs(tittle="Nidel de educación ponderado", x="Nivel de educación", y= "Proporción de la población")
+
+#Calculando el ingreso promedio por nivel de estudios
+Ing_mean_edu_sex<-svyby(~ingocup,~cs_p13_1+sex, design = Enoe_diseño, FUN = svymean, na.rm =T)
+
+ingreso_edu<-Enoe_2025%>%
+  group_by(cs_p13_1)%>%
+  summarise(prom_ing=mean(ingocup, na.rm=T))%>%
+  ungroup()
+
+Ing_mean_edu_sex
+
+Ing_mean_edu<-svyby(~ingocup,~cs_p13_1, design = Enoe_diseño, FUN = svymean, na.rm =T)
+
+#calculamos por ingreso total de la población
+Ing_mean<-svymean(~ingocup, design = Enoe_diseño,na.rm =T)
+
+#Calculamos por sexo
+Ing_mean_sex<-svyby(~ingocup,~sex, design = Enoe_diseño, FUN = svymean, na.rm =T)
+
+
+codigos_niveles <- c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9","99") # Ajusta estos códigos a tus datos reales
+etiquetas_niveles <- c("Ninguna", "Preescolar", "Primaria", "Secundaria",
+                       "Preparatoria", "Normal", "Técnica", "Profesional",
+                       "Maestría", "Doctorado", "No sabe")
+rm(Ing_mean_edu_sex)
+Ing_mean_edu_sex<-svyby(~ingocup,~cs_p13_1+sex, design = Enoe_diseño, FUN = svymean, na.rm =T)
+
+Ing_mean_edu_sex<-Ing_mean_edu_sex%>%
+  mutate(
+    cs_p13_1 = factor(as.character(cs_p13_1), # Convertimos a caracter primero para evitar problemas con números
+                      levels = codigos_niveles,
+                      labels = etiquetas_niveles)
+  )
+  
+Ing_mean_edu_sex <- Ing_mean_edu_sex %>%
+  mutate(sex = factor(as.character(sex),
+                 levels = c("1", "2"),
+                 labels = c("Hombres", "Mujeres"))
+  )
+
+ggplot(Ing_mean_edu_sex, aes(x = cs_p13_1, fill = sex, y = ingocup)) +
+  geom_col(position = "dodge") + # Usamos 'position = "dodge"' para que las barras de sexo no se apilen
+  # Ya no necesitas scale_fill_discrete(labels=...) porque las etiquetas ya están en el factor 'sex'
+  # Ni guides(fill=guide_legend(title="Sexo")) porque labs() lo hace
+  # Ni scale_x_discrete(limits=..., labels=...) porque el factor ya tiene el orden y las etiquetas
+  
+  labs(
+    title = "Ingresos por Nivel de Educación y Sexo", # Título principal
+    x = "Nivel Educativo",                             # Etiqueta del eje X
+    y = "Ingresos",                                   # Etiqueta del eje Y
+    fill = "Sexo"                                     # Título de la leyenda del relleno
+  ) +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 45, hjust = 1), # Rotar y ajustar texto del eje X
+    legend.position = "right" # Posición de la leyenda
+  )
+#Hacemos interactivo el mapa
+   
+p <- ggplot(Ing_mean_edu_sex, aes(x = cs_p13_1, fill = sex, y = ingocup,
+                                            text = paste0("Nivel: ", cs_p13_1,
+                                                          "<br>Sexo: ", sex,
+                                                          "<br>Ingreso: $", scales::comma(ingocup)))) + # Añade texto para el tooltip
+  geom_col(position = "dodge") +
+  labs(
+    title = "Ingresos por Nivel de Educación y Sexo",
+    x = "Nivel Educativo",
+    y = "Ingreso Promedio Mensual", # Mejor usar un nombre más descriptivo para el eje Y
+    fill = "Sexo"
+  ) +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+    legend.position = "right"
+  )
+ggplotly(p, tooltip = "text")
+
+#Guardamos el widget
+p_interactivo <- ggplotly(p, tooltip = "text")
+carpeta_destino<-"C:/Users/USER/Downloads/Bases de datos"
+nombre_mapa<-"Ingreso_promedio.html"
+ruta_completa_archivo<-file.path(carpeta_destino,nombre_mapa)
+
+saveWidget(p_interactivo, file = ruta_completa_archivo, selfcontained=T)
