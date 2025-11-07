@@ -11,7 +11,7 @@ library(tidyverse)
 library(DT)
 library(htmlwidgets)
 
-#Cargar base de datos
+#Cargar base de datos obtenida de microdatos del INEGI ENOE 2025 trimestre 1
 Enoe_2025<- conjunto_de_datos_sdem_enoe_2025_1t
 
 #Exploración de la variable ingreso
